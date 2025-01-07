@@ -1,13 +1,9 @@
-# Expert MCP Server
+# MCP Expert Server
 
-A Model Context Protocol server that provides tools for query generation and documentation assistance using Claude.
+A Model Context Protocol server that provides intelligent query generation and documentation assistance using Claude AI. The server analyzes your API documentation and provides two main tools:
 
-## Features
-
-- `create-query`: Generate queries from natural language requests using API documentation
-- `documentation`: Get information from API documentation using natural language questions
-- File-based documentation system for easy customization
-- Configurable system prompt
+- **create-query**: Generates queries based on natural language requests
+- **documentation**: Provides relevant documentation information based on questions
 
 ## Prerequisites
 
@@ -21,86 +17,89 @@ A Model Context Protocol server that provides tools for query generation and doc
 ```bash
 npm install
 ```
-3. Copy `.env.example` to `.env` and configure your environment variables:
-```bash
-cp .env.example .env
+3. Create a `.env` file with your Anthropic API key:
 ```
-4. Add your Anthropic API key to `.env`
-
-## Documentation Setup
-
-1. Place your documentation files in the `docs` directory
-2. List the documentation files in `docs.txt`, one file per line. For example:
+ANTHROPIC_API_KEY=your_api_key_here
 ```
-api.txt
-endpoints.txt
-authentication.txt
-```
-3. Customize the system prompt in `prompts/system-prompt.txt`
 
-## Building
+## Setup
 
+Before running the server, you need to:
+
+1. Add your API documentation files to the `docs` directory (supports `.txt`, `.md`, and `.json` files)
+
+2. Optionally customize the prompts in the `prompts` directory:
+   - `system-prompt.txt`: Main system prompt for Claude
+   - `tool-metadata.txt`: Additional context for tool descriptions
+   - `query-metadata.txt`: Additional context for query generation
+
+3. Run the setup script to analyze documentation and generate service description:
 ```bash
 npm run build
+npm run setup
 ```
 
-## Running
+## Usage
 
+1. Start the server:
 ```bash
 npm start
 ```
 
-## Usage with Claude for Desktop
+2. The server exposes two tools via the Model Context Protocol:
 
-Add this configuration to your Claude for Desktop config file:
+   - **create-query**: Generate a query based on natural language request
+     ```json
+     {
+       "name": "create-query",
+       "arguments": {
+         "request": "Find all users who signed up in the last week"
+       }
+     }
+     ```
 
-```json
-{
-  "mcpServers": {
-    "expert": {
-      "command": "node",
-      "args": ["path/to/expert-server/build/index.js"],
-      "env": {
-        "ANTHROPIC_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
+   - **documentation**: Get information from the documentation
+     ```json
+     {
+       "name": "documentation",
+       "arguments": {
+         "request": "How do I authenticate API requests?"
+       }
+     }
+     ```
 
-## Available Tools
-
-### create-query
-
-Generates a query based on a natural language request using the provided API documentation.
-
-Example:
-```
-"Get all users who signed up in the last week"
-```
-
-### documentation
-
-Answers questions about the API documentation using natural language.
-
-Example:
-```
-"What authentication methods are supported?"
-```
-
-## File Structure
+## Directory Structure
 
 ```
-/
-├── docs/                  # Documentation files
-│   ├── api.txt           # API documentation
-│   ├── endpoints.txt     # Endpoint documentation
-│   └── ...              # Other documentation files
-├── prompts/
-│   └── system-prompt.txt # System prompt for Claude
-├── docs.txt             # List of documentation files to load
-└── ...                  # Other project files
+.
+├── docs/                  # Your API documentation files
+├── prompts/              # System prompts and metadata
+│   ├── system-prompt.txt    # Main system prompt
+│   ├── tool-metadata.txt    # Tool description context
+│   ├── query-metadata.txt   # Query generation context
+│   └── service-description.txt  # Generated service description
+├── src/                  # Source code
+│   ├── index.ts            # Entry point
+│   ├── server.ts           # MCP server implementation
+│   └── services/           # Core services
+│       └── expertService.ts  # Claude integration
+└── package.json
 ```
+
+## Development
+
+- Build the project:
+```bash
+npm run build
+```
+
+- The server uses TypeScript and follows a modular architecture
+- All Claude interactions are handled by the ExpertService class
+- Debug logs are written to stderr with [DEBUG] prefix
+
+## Environment Variables
+
+- `ANTHROPIC_API_KEY`: Your Anthropic API key (required)
 
 ## License
 

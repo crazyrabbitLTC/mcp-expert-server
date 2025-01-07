@@ -81,10 +81,6 @@ export async function createServer(config?: ServerConfig) {
     maxTokens: config?.maxTokens,
   });
 
-  debugLog('Initializing Expert MCP Server...');
-  const serviceDescription = await expertService.analyzeDocumentation();
-  debugLog('Server initialization complete.');
-
   const server = new Server(
     {
       name: "expert-server",
@@ -99,6 +95,12 @@ export async function createServer(config?: ServerConfig) {
 
   // List available tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Initialize service description if not already done
+    if (!expertService.getServiceDescription()) {
+      debugLog('Initializing service description...');
+      await expertService.analyzeDocumentation();
+    }
+
     const baseDescription = expertService.getServiceDescription();
     const toolDescription = baseDescription ? 
       ` for ${baseDescription.toLowerCase()}` : 

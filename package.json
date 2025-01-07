@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepublishOnly": "npm run build",
-    "start": "node build/index.js"
+    "start": "node build/index.js",
+    "setup": "node build/setup.js"
   },
   "files": [
     "build",

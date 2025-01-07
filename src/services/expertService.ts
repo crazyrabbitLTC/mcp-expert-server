@@ -95,11 +95,14 @@ export class ExpertService {
     this.docsDir = config?.docsDir || join(process.cwd(), 'docs');
     this.promptsDir = config?.promptsDir || join(process.cwd(), 'prompts');
     
-    // Load documentation, system prompt, and metadata
+    // Load files synchronously
+    debugLog('Loading documentation and configuration files...');
     this.loadDocumentation();
     this.systemPrompt = this.loadSystemPrompt();
     this.toolMetadata = this.loadToolMetadata();
     this.queryMetadata = this.loadQueryMetadata();
+    this.serviceDescription = this.loadServiceDescription();
+    debugLog('Initial file loading complete');
     
     // Validate initialization
     if (!this.systemPrompt) {
@@ -182,6 +185,22 @@ export class ExpertService {
       return metadata;
     } catch (error) {
       debugLog('No query metadata file found - this is optional and can be added to provide additional context for queries');
+      return '';
+    }
+  }
+
+  /**
+   * Loads the pre-generated service description
+   * @returns The service description or empty string if not found
+   */
+  private loadServiceDescription(): string {
+    const descriptionPath = join(this.promptsDir, 'service-description.txt');
+    try {
+      const description = readFileSync(descriptionPath, 'utf-8');
+      debugLog('Successfully loaded service description');
+      return description;
+    } catch (error) {
+      debugLog('No service description found - please run setup script first');
       return '';
     }
   }
@@ -330,6 +349,11 @@ Please provide a clear, concise response based solely on the provided documentat
    * @returns A promise that resolves to the service description
    */
   async analyzeDocumentation(): Promise<string> {
+    // If we already have a description, return it
+    if (this.serviceDescription) {
+      return this.serviceDescription;
+    }
+
     debugLog('Analyzing documentation to generate service description...');
     
     try {
