@@ -13,13 +13,41 @@ if (!CLAUDE_API_KEY) {
 }
 
 /**
- * Interface for Claude API response structure
+ * Interface for Claude message content
+ */
+interface ClaudeContent {
+  type: 'text' | 'image';
+  text?: string;
+  source?: {
+    type: 'base64' | 'url';
+    media_type: string;
+    data: string;
+  };
+}
+
+/**
+ * Interface for Claude message
+ */
+interface ClaudeMessage {
+  role: 'user' | 'assistant';
+  content: string | Array<ClaudeContent>;
+}
+
+/**
+ * Interface for Claude API response
  */
 interface ClaudeResponse {
-  content: {
-    type: string;
-    text?: string;
-  }[];
+  id: string;
+  type: 'message';
+  role: 'assistant';
+  model: string;
+  content: Array<ClaudeContent>;
+  stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence';
+  stop_sequence?: string;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 /**
@@ -29,6 +57,8 @@ interface ExpertServiceConfig {
   apiKey?: string;
   model?: string;
   maxTokens?: number;
+  docsDir?: string;
+  promptsDir?: string;
 }
 
 // Add a debug logging function that only writes to stderr
@@ -47,6 +77,8 @@ export class ExpertService {
   private queryMetadata: string = '';
   private readonly model: string;
   private readonly maxTokens: number;
+  private readonly docsDir: string;
+  private readonly promptsDir: string;
   private serviceDescription: string = '';
 
   /**
@@ -60,6 +92,8 @@ export class ExpertService {
     this.documentation = new Map();
     this.model = config?.model || 'claude-3-sonnet-20240229';
     this.maxTokens = config?.maxTokens || 1500;
+    this.docsDir = config?.docsDir || join(process.cwd(), 'docs');
+    this.promptsDir = config?.promptsDir || join(process.cwd(), 'prompts');
     
     // Load documentation, system prompt, and metadata
     this.loadDocumentation();
@@ -81,7 +115,7 @@ export class ExpertService {
    * @returns The system prompt string or empty string if not found
    */
   private loadSystemPrompt(): string {
-    const promptPath = join(process.cwd(), 'prompts', 'system-prompt.txt');
+    const promptPath = join(this.promptsDir, 'system-prompt.txt');
     try {
       return readFileSync(promptPath, 'utf-8');
     } catch (error) {
@@ -94,18 +128,22 @@ export class ExpertService {
    * Loads all documentation files from the docs directory
    */
   private loadDocumentation(): void {
-    const docsDir = join(process.cwd(), 'docs');
     try {
-      const files = readdirSync(docsDir);
+      const files = readdirSync(this.docsDir)
+        .filter(file => {
+          // Filter out system files and non-text files
+          return !file.startsWith('.') && 
+                 (file.endsWith('.txt') || file.endsWith('.md') || file.endsWith('.json'));
+        });
 
       if (files.length === 0) {
-        debugLog(`No documentation files found in ${docsDir}`);
+        debugLog(`No valid documentation files found in ${this.docsDir}`);
         return;
       }
 
       for (const file of files) {
         try {
-          const filePath = join(docsDir, file);
+          const filePath = join(this.docsDir, file);
           const content = readFileSync(filePath, 'utf-8');
           this.documentation.set(file, content);
           debugLog(`Successfully loaded documentation from ${file}`);
@@ -114,7 +152,7 @@ export class ExpertService {
         }
       }
     } catch (error) {
-      debugLog(`Failed to read docs directory ${docsDir}: ${error}`);
+      debugLog(`Failed to read docs directory ${this.docsDir}: ${error}`);
     }
   }
 
@@ -122,7 +160,7 @@ export class ExpertService {
    * Loads tool description metadata from file
    */
   private loadToolMetadata(): string {
-    const metadataPath = join(process.cwd(), 'prompts', 'tool-metadata.txt');
+    const metadataPath = join(this.promptsDir, 'tool-metadata.txt');
     try {
       const metadata = readFileSync(metadataPath, 'utf-8');
       debugLog('Successfully loaded tool metadata file');
@@ -137,7 +175,7 @@ export class ExpertService {
    * Loads query context metadata from file
    */
   private loadQueryMetadata(): string {
-    const metadataPath = join(process.cwd(), 'prompts', 'query-metadata.txt');
+    const metadataPath = join(this.promptsDir, 'query-metadata.txt');
     try {
       const metadata = readFileSync(metadataPath, 'utf-8');
       debugLog('Successfully loaded query metadata file');
@@ -181,14 +219,41 @@ export class ExpertService {
     return content.text;
   }
 
+  private async callClaude(params: Parameters<typeof this.anthropic.messages.create>[0], context: string): Promise<ClaudeResponse> {
+    const timeout = 30000; // 30 seconds timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Request timed out after ${timeout}ms`)), timeout);
+    });
+
+    try {
+      debugLog(`Making API request to Claude for ${context}...`);
+      const response = await Promise.race([
+        this.anthropic.messages.create(params),
+        timeoutPromise
+      ]);
+      debugLog('Received response from Claude');
+      return response as ClaudeResponse;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('timed out')) {
+        debugLog(`Claude API request timed out for ${context}`);
+      } else {
+        debugLog(`Claude API request failed for ${context}: ${error}`);
+      }
+      throw error;
+    }
+  }
+
   /**
    * Generates a query based on natural language request
    * @param request - The natural language request
    * @returns Generated query or error message
    */
   async generateQuery(request: string): Promise<string> {
+    const startTime = Date.now();
+    debugLog(`Starting query generation for: "${request}"`);
+    
     try {
-      const message = await this.anthropic.messages.create({
+      const message = await this.callClaude({
         model: this.model,
         max_tokens: this.maxTokens,
         system: this.systemPrompt,
@@ -206,11 +271,15 @@ Generate a query for this request: "${request}"
 Please return ONLY the query, with no additional explanation or context.`
           }
         ]
-      }) as ClaudeResponse;
+      }, `query request: "${request}"`);
 
-      return this.validateClaudeResponse(message, `query request: "${request}"`);
+      const response = this.validateClaudeResponse(message, `query request: "${request}"`);
+      const duration = Date.now() - startTime;
+      debugLog(`Query generation completed in ${duration}ms`);
+      return response;
     } catch (error) {
-      console.error('Failed to generate query:', error);
+      const duration = Date.now() - startTime;
+      debugLog(`Query generation failed after ${duration}ms: ${error}`);
       return `Error: Unable to generate query for request: "${request}"`;
     }
   }
@@ -221,8 +290,11 @@ Please return ONLY the query, with no additional explanation or context.`
    * @returns Response from documentation or error message
    */
   async getDocumentationResponse(request: string): Promise<string> {
+    const startTime = Date.now();
+    debugLog(`Starting documentation request for: "${request}"`);
+    
     try {
-      const message = await this.anthropic.messages.create({
+      const message = await this.callClaude({
         model: this.model,
         max_tokens: this.maxTokens,
         system: this.systemPrompt,
@@ -240,11 +312,15 @@ Answer this question about the documentation: "${request}"
 Please provide a clear, concise response based solely on the provided documentation and context.`
           }
         ]
-      }) as ClaudeResponse;
+      }, `documentation request: "${request}"`);
 
-      return this.validateClaudeResponse(message, `documentation request: "${request}"`);
+      const response = this.validateClaudeResponse(message, `documentation request: "${request}"`);
+      const duration = Date.now() - startTime;
+      debugLog(`Documentation request completed in ${duration}ms`);
+      return response;
     } catch (error) {
-      console.error('Failed to process documentation request:', error);
+      const duration = Date.now() - startTime;
+      debugLog(`Documentation request failed after ${duration}ms: ${error}`);
       return `Error: Unable to process documentation request: "${request}"`;
     }
   }
@@ -268,9 +344,10 @@ Please provide a clear, concise response based solely on the provided documentat
         debugLog('Including tool metadata in analysis');
       }
       
-      const message = await this.anthropic.messages.create({
+      const message = await this.callClaude({
         model: this.model,
         max_tokens: this.maxTokens,
+        system: this.systemPrompt,
         messages: [
           {
             role: 'user',
@@ -284,8 +361,9 @@ ${this.toolMetadata ? `Additional Context:\n${this.toolMetadata}` : ''}
 Your response should be direct and focused on the core functionality, suitable for use in an API tool description.`
           }
         ]
-      }) as ClaudeResponse;
+      }, 'documentation analysis');
 
+      debugLog('Received response from Claude');
       const description = this.validateClaudeResponse(message, 'documentation analysis');
       if (!description.startsWith('Error:')) {
         debugLog('Successfully generated service description: ' + description);
@@ -296,7 +374,11 @@ Your response should be direct and focused on the core functionality, suitable f
       
       return this.serviceDescription;
     } catch (error) {
-      debugLog('Error analyzing documentation: ' + error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      debugLog('Error analyzing documentation: ' + errorMessage);
+      if (error instanceof Error && error.stack) {
+        debugLog('Stack trace: ' + error.stack);
+      }
       return '';
     }
   }
@@ -307,5 +389,39 @@ Your response should be direct and focused on the core functionality, suitable f
    */
   getServiceDescription(): string {
     return this.serviceDescription;
+  }
+
+  /**
+   * Reloads all documentation and metadata files and updates the service description
+   * @returns A promise that resolves when the reload is complete
+   */
+  async reloadDocumentation(): Promise<void> {
+    debugLog('Reloading documentation and metadata...');
+    
+    // Clear existing documentation
+    this.documentation.clear();
+    
+    // Reload all files
+    this.loadDocumentation();
+    this.systemPrompt = this.loadSystemPrompt();
+    this.toolMetadata = this.loadToolMetadata();
+    this.queryMetadata = this.loadQueryMetadata();
+    
+    // Update service description
+    debugLog('Updating service description...');
+    await this.analyzeDocumentation();
+    
+    debugLog('Documentation reload complete');
+  }
+
+  /**
+   * Gets the paths to the documentation and prompts directories
+   * @returns Object containing the directory paths
+   */
+  getDirectoryPaths(): { docsDir: string; promptsDir: string } {
+    return {
+      docsDir: this.docsDir,
+      promptsDir: this.promptsDir
+    };
   }
 }

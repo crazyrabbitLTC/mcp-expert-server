@@ -140,7 +140,9 @@ export async function createServer(config?: ServerConfig) {
 
   // Handle tool execution
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const startTime = Date.now();
     const { name, arguments: args } = request.params;
+    debugLog(`Received ${name} request with arguments: ${JSON.stringify(args)}`);
 
     try {
       if (name === "create-query") {
@@ -151,7 +153,7 @@ export async function createServer(config?: ServerConfig) {
           debugLog(`Query generation failed: ${query}`);
         }
         
-        return {
+        const response = {
           content: [
             {
               type: "text",
@@ -159,6 +161,10 @@ export async function createServer(config?: ServerConfig) {
             },
           ],
         };
+        
+        const duration = Date.now() - startTime;
+        debugLog(`Request completed in ${duration}ms with response: ${JSON.stringify(response)}`);
+        return response;
       } else if (name === "documentation") {
         const { request: docRequest } = DocumentationArgumentsSchema.parse(args);
         const response = await expertService.getDocumentationResponse(docRequest);
@@ -167,7 +173,7 @@ export async function createServer(config?: ServerConfig) {
           debugLog(`Documentation request failed: ${response}`);
         }
         
-        return {
+        const result = {
           content: [
             {
               type: "text",
@@ -175,11 +181,16 @@ export async function createServer(config?: ServerConfig) {
             },
           ],
         };
+        
+        const duration = Date.now() - startTime;
+        debugLog(`Request completed in ${duration}ms with response: ${JSON.stringify(result)}`);
+        return result;
       } else {
         throw new Error(`Unknown tool: ${name}`);
       }
     } catch (error) {
-      debugLog('Tool execution failed: ' + error);
+      const duration = Date.now() - startTime;
+      debugLog(`Request failed after ${duration}ms: ${error}`);
       
       if (error instanceof z.ZodError) {
         const message = `Invalid arguments: ${error.errors
