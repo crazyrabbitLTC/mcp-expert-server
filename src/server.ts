@@ -7,13 +7,20 @@ import { ExpertService } from "./services/expertService.js";
 import { z } from "zod";
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function debugLog(message: string) {
   console.error(`[DEBUG] ${message}`);
 }
 
 // Validate required directories exist
-const baseDir = process.cwd();
+const baseDir = join(__dirname, '..');
+debugLog(`Base directory: ${baseDir}`);
+
 const requiredDirs = ['docs', 'prompts'].map(dir => join(baseDir, dir));
 const missingDirs = requiredDirs.filter(dir => !existsSync(dir));
 

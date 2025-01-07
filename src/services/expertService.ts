@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from 'dotenv';
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 config();
 
@@ -92,8 +93,15 @@ export class ExpertService {
     this.documentation = new Map();
     this.model = config?.model || 'claude-3-sonnet-20240229';
     this.maxTokens = config?.maxTokens || 1500;
-    this.docsDir = config?.docsDir || join(process.cwd(), 'docs');
-    this.promptsDir = config?.promptsDir || join(process.cwd(), 'prompts');
+    
+    // Use paths relative to script location if not provided in config
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const baseDir = join(scriptDir, '..', '..');
+    this.docsDir = config?.docsDir || join(baseDir, 'docs');
+    this.promptsDir = config?.promptsDir || join(baseDir, 'prompts');
+    
+    debugLog(`Using docs directory: ${this.docsDir}`);
+    debugLog(`Using prompts directory: ${this.promptsDir}`);
     
     // Load files synchronously
     debugLog('Loading documentation and configuration files...');
