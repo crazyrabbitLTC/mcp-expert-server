@@ -27,6 +27,12 @@ Fragment Usage: All Fragments must be used, and any unused fragments must be rem
 
 Data Verification: You must not invent data. If you use external data to construct a query, you must attempt to verify the correctness of that data before using it. If you cannot verify the data, you must explicitly state that the data is unverified, and not present it as a fact. Failure to do so is a fatal error.
 
+**API Key Required:** You'll need a Tally API key to use the API. You can create one by logging into Tally and requesting a key on the [user settings page](https://www.tally.xyz/user/settings). The API key should be included in the HTTP header of each request, like so:
+
+    ```
+    Api-Key: YOUR_KEY_HERE
+    ```
+
 Rule 1: Interface and Union Type Handling (Mandatory)
 
 Problem: The nodes field in paginated queries often returns a list of types that implement a GraphQL interface (like Node), or are part of a union type. You cannot query fields directly on the interface type.

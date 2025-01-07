@@ -1,5 +1,5 @@
 {
-  "name": "expert-server",
+  "name": "mcp-expert-server",
   "version": "1.0.0",
   "description": "An MCP server for query generation and documentation assistance",
   "type": "module",

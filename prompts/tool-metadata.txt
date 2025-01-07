@@ -1,9 +1,1 @@
-# Additional context about the API/Service for tool descriptions
-# Add information that helps describe what this service is and how it should be used
-# For example:
-# - The intended audience (e.g., "This API is designed for enterprise developers")
-# - Primary use cases (e.g., "Commonly used in IoT deployments")
-# - Service category (e.g., "Part of our data processing suite")
-# - Integration points (e.g., "Core component of our ML pipeline")
-
-# Remove these example comments and add your tool description metadata here
+Always follow the documentation explicitly. Never assume filtering or other operations are possible. 

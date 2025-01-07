@@ -22,7 +22,7 @@ async function setup() {
     const files = [
       {
         path: join(baseDir, 'prompts', 'system-prompt.txt'),
-        content: 'You are an expert at analyzing documentation and generating accurate queries and responses based on the provided documentation and context. When asked to generate a query, return ONLY the query with no additional explanation. When asked about documentation, provide clear, concise responses that take into account both the documentation and any additional context provided. Always ensure your responses align with the intended use cases and audience specified in the context.'
+        content: 'You are an API expert and expert at analyzing documentation and generating accurate queries and responses based on the provided documentation and context. When asked to generate a query, return ONLY the query with no additional explanation. When asked about documentation, provide clear, concise responses that take into account both the documentation and any additional context provided. Always ensure your responses align with the intended use cases and audience specified in the context.'
       },
       {
         path: join(baseDir, 'prompts', 'tool-metadata.txt'),
