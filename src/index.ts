@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function debugLog(message: string) {
   console.error(`[DEBUG] ${message}`);
@@ -41,7 +46,11 @@ async function main() {
       debugLog(`Max tokens: ${options.maxTokens}`);
     }
     
-    const server = await createServer(options);
+    const server = await createServer({
+      ...options,
+      docsDir: join(__dirname, '../docs'),
+      promptsDir: join(__dirname, '../prompts')
+    });
     const transport = new StdioServerTransport();
     
     await server.connect(transport);

@@ -73,12 +73,16 @@ const DocumentationArgumentsSchema = z.object({
 interface ServerConfig {
   model?: string;
   maxTokens?: number;
+  docsDir?: string;
+  promptsDir?: string;
 }
 
 export async function createServer(config?: ServerConfig) {
   const expertService = new ExpertService({
     model: config?.model,
     maxTokens: config?.maxTokens,
+    docsDir: config?.docsDir,
+    promptsDir: config?.promptsDir,
   });
 
   const server = new Server(

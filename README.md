@@ -41,6 +41,8 @@ npm run setup
 
 ## Usage
 
+### Standalone Server
+
 1. Start the server:
 ```bash
 npm start
@@ -67,6 +69,26 @@ npm start
        }
      }
      ```
+
+### Claude Desktop Configuration
+
+Add this configuration to your Claude Desktop config file:
+
+```json
+{
+  "mcpServers": {
+    "expert": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/expert-server/build/index.js"],
+      "env": {
+        "ANTHROPIC_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+Replace `/ABSOLUTE/PATH/TO/expert-server` with the actual absolute path to your server installation.
 
 ## Directory Structure
 
@@ -100,6 +122,20 @@ npm run build
 ## Environment Variables
 
 - `ANTHROPIC_API_KEY`: Your Anthropic API key (required)
+
+## Troubleshooting
+
+If you encounter connection issues with Claude Desktop:
+
+1. Ensure the server has executable permissions:
+```bash
+chmod +x build/index.js
+```
+
+2. Use absolute paths in your Claude Desktop config
+3. Check the Claude Desktop logs for any error messages
+4. Make sure you've run `npm run setup` to generate the service description
+5. Verify your `ANTHROPIC_API_KEY` is correctly set
 
 ## License
 
