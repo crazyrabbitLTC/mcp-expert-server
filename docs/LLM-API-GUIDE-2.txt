@@ -1,0 +1,1211 @@
+
+Tally API - LLM Query Construction Rules (Mandatory & Unbreakable)
+
+Introduction
+
+This document outlines the mandatory and unbreakable rules for Large Language Models (LLMs) when constructing queries for the Tally API. These rules are not suggestions—they must be strictly followed to ensure correct, efficient, and error-free GraphQL queries. Failure to adhere to any of these rules will result in a fatal error, and the LLM must immediately terminate the current query and return an error message indicating which rule was broken. There is no acceptable deviation whatsoever from these rules.
+
+Core Principles
+
+Never Assume: Under no circumstances should the LLM assume any default values or behaviors for sort, filter, or other optional input parameters. You must explicitly declare them in the query.
+
+Type Awareness: You must always be acutely aware of the GraphQL types involved, especially interface and union types, and use inline fragments accordingly. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Fragment Prioritization: You must use fragments to minimize repetition, improve maintainability, and ensure efficient queries. Not using fragments is absolutely unacceptable and will result in a fatal error.
+
+Explicit Field Selection: You must always explicitly request each field you need, and never assume fields will be returned automatically.
+
+Pagination: You must always use pagination where appropriate to ensure complete query results are retrieved, using the page input and pageInfo fields.
+
+Correct API Use: You must adhere to API constraints. Some queries have required fields that must be used correctly.
+
+Schema Consultation: You must consult the complete schema reference before creating any queries.
+
+Multi-step Queries: You must properly structure multi-step queries into a sequence of dependent queries if data from one query is needed for a subsequent query.
+
+Fragment Usage: All Fragments must be used, and any unused fragments must be removed before the query can be submitted.
+
+Data Verification: You must not invent data. If you use external data to construct a query, you must attempt to verify the correctness of that data before using it. If you cannot verify the data, you must explicitly state that the data is unverified, and not present it as a fact. Failure to do so is a fatal error.
+
+Rule 1: Interface and Union Type Handling (Mandatory)
+
+Problem: The nodes field in paginated queries often returns a list of types that implement a GraphQL interface (like Node), or are part of a union type. You cannot query fields directly on the interface type.
+
+Solution: You must use inline fragments (... on TypeName) to access fields on the concrete types within a list of interface types. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Example (Correct):
+
+query GetOrganizations {
+  organizations {
+    nodes {
+      ... on Organization {
+        id
+        name
+        slug
+        metadata {
+          icon
+        }
+      }
+    }
+    pageInfo {
+      firstCursor
+      lastCursor
+      count
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetOrganizations {
+  organizations {
+    nodes {
+      id
+      name
+      slug
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Specific Error Case: Attempting to query fields directly on the nodes field when querying votes without the ... on Vote fragment. This is a fatal error and will result in immediate termination of the query.
+
+query GetVotes {
+  votes(input: {
+    filters: {
+      voter: "0x1B686eE8E31c5959D9F5BBd8122a58682788eeaD"
+    }
+  }) {
+    nodes {
+      type
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Always use inline fragments (... on TypeName) inside the nodes list, and any other location where interface types can be returned, to query the specific fields of the concrete type. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Rule 2: Explicit Sort and Filter Inputs (Mandatory)
+
+Problem: Queries with sort or filter options often have required input types that must be fully populated.
+
+Solution: You must never assume default sort or filter values. You must always explicitly provide them in the query if you need them. Even if you don't need sorting or filtering, you must provide an empty input object.
+
+Example (Correct):
+
+query GetProposals($input: ProposalsInput!) {
+  proposals(input: $input) {
+    nodes {
+        ... on Proposal {
+            id
+            metadata {
+                title
+            }
+            status
+        }
+    }
+    pageInfo {
+      firstCursor
+      lastCursor
+      count
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+*  **Input:**
+content_copy
+download
+Use code with caution.
+input ProposalsInput {
+    filters: ProposalsFiltersInput
+    page: PageInput
+    sort: ProposalsSortInput
+}
+
+input ProposalsFiltersInput {
+    governorId: AccountID
+    includeArchived: Boolean
+    isDraft: Boolean
+    organizationId: IntID
+    proposer: Address
+}
+input ProposalsSortInput {
+    isDescending: Boolean!
+    sortBy: ProposalsSortBy!
+}
+enum ProposalsSortBy {
+    id
+}
+
+input PageInput {
+    afterCursor: String
+    beforeCursor: String
+    limit: Int
+}
+content_copy
+download
+Use code with caution.
+Graphql
+*   **Query:** (with optional sort, and filters)
+content_copy
+download
+Use code with caution.
+query GetProposalsWithSortAndFilter {
+  proposals(input: {
+      filters: {
+          governorId: "eip155:1:0x123abc"
+          includeArchived: true
+      },
+      sort: {
+        sortBy: id
+        isDescending: false
+      },
+      page: {
+        limit: 10
+      }
+  })
+    {
+    nodes {
+        ... on Proposal {
+            id
+            metadata {
+                title
+            }
+            status
+        }
+    }
+    pageInfo {
+      firstCursor
+      lastCursor
+       count
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetProposals {
+  proposals {
+    nodes {
+      id
+      metadata {
+        title
+      }
+      status
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Always provide a valid input object for queries that require filters or sorts. Use null if no sorting or filtering is needed for a nullable input, but if the filter is required, use an empty object when no filters are required. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Rule 3: Fragment Usage (Mandatory)
+
+Problem: Repeated field selections in multiple queries make the code less maintainable and are prone to errors.
+
+Solution: You must use fragments to group common field selections and reuse them across multiple queries. Not using fragments is absolutely unacceptable and will result in a fatal error.
+
+Example (Correct):
+
+fragment BasicProposalDetails on Proposal {
+    id
+    onchainId
+    metadata {
+      title
+      description
+    }
+   status
+}
+
+
+query GetProposals($input: ProposalsInput!) {
+  proposals(input: $input) {
+    nodes {
+        ... on Proposal {
+            ...BasicProposalDetails
+         }
+    }
+    pageInfo {
+      firstCursor
+      lastCursor
+       count
+    }
+  }
+}
+
+query GetSingleProposal($input: ProposalInput!) {
+    proposal(input: $input) {
+      ...BasicProposalDetails
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetProposals {
+  proposals {
+    nodes {
+       id
+       onchainId
+       metadata {
+        title
+        description
+       }
+       status
+    }
+  }
+}
+
+query GetSingleProposal {
+    proposal(input: {id: 123}) {
+      id
+      onchainId
+      metadata {
+        title
+        description
+      }
+      status
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Always create and use fragments, and make them focused, and reusable across multiple queries. Not using fragments is absolutely unacceptable and will result in a fatal error.
+
+Rule 4: Explicit Field Selection (Mandatory)
+
+Problem: Assuming the API will return certain fields if they aren't specifically requested.
+
+Solution: You must always request every field you need in your query.
+
+Example (Correct):
+
+query GetOrganization($input: OrganizationInput!) {
+  organization(input: $input) {
+    id
+    name
+    slug
+    metadata {
+      icon
+      description
+      socials {
+        website
+      }
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetOrganization {
+  organization {
+    name
+    slug
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: List out every field you need in the query, and avoid implied or implicit field selections.
+
+Rule 5: Input Type Validation (Mandatory)
+
+Problem: Using the wrong types when providing input values to a query.
+
+Solution: Check that all values passed as inputs to a query match the type declared in the input. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Example (Correct):
+
+query GetAccount($id: AccountID!) {
+  account(id: $id) {
+    id
+    name
+    address
+    ens
+    picture
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Query
+
+query GetAccountCorrect {
+   account(id:"eip155:1:0x123") {
+    id
+     name
+     address
+     ens
+     picture
+   }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+* The `id` argument correctly uses the `AccountID` type, which is a string representing a CAIP-10 ID.
+content_copy
+download
+Use code with caution.
+
+Specific Error Case: Attempting to use a plain integer for organizationId in proposal queries. This is a fatal error and will result in immediate termination of the query.
+
+query GetProposals {
+  proposals(input: {
+    filters: {
+      organizationId: 1
+    }
+  })
+  {
+    nodes {
+      ... on Proposal {
+          id
+         }
+      }
+   }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetAccount($id: AccountID!) {
+  account(id: $id) {
+    id
+    name
+    address
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Query
+
+query GetAccountIncorrect {
+   account(id:123) {
+    id
+     name
+     address
+     ens
+     picture
+   }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Ensure you're using the correct type. Int cannot be used where an IntID, AccountID, HashID or AssetID type is required. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+ID Type Definitions
+
+AccountID: A CAIP-10 compliant account id. (e.g., "eip155:1:0x7e90e03654732abedf89Faf87f05BcD03ACEeFdc")
+
+AssetID: A CAIP-19 compliant asset id. (e.g., "eip155:1/erc20:0x6b175474e89094c44da98b954eedeac495271d0f")
+
+IntID: A 64-bit integer represented as a string. (e.g., "1234567890")
+
+HashID: A CAIP-2 scoped identifier for identifying transactions across chains. (e.g., "eip155:1:0xDEAD")
+
+BlockID: A CAIP-2 scoped identifier for identifying blocks across chains. (e.g., "eip155:1:15672")
+
+ChainID: A CAIP-2 compliant chain ID. (e.g., "eip155:1")
+
+Address: A 20 byte ethereum address, represented as 0x-prefixed hexadecimal. (e.g., "0x1234567800000000000000000000000000000abc")
+
+Rule 6: Enum Usage (Mandatory)
+
+Problem: Using a string value when an enum type is expected.
+
+Solution: Always use the correct values for an enum type. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Example (Correct)
+
+query GetVotes($input: VotesInput!) {
+  votes(input: $input) {
+    nodes {
+      id
+       type
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Input:
+
+input VotesInput {
+    filters: VotesFiltersInput
+    page: PageInput
+    sort: VotesSortInput
+}
+
+input VotesFiltersInput {
+    proposalId: IntID
+    proposalIds: [IntID!]
+    voter: Address
+    includePendingVotes: Boolean
+    type: VoteType
+}
+enum VoteType {
+    abstain
+    against
+    for
+    pendingabstain
+    pendingagainst
+    pendingfor
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Query: (Correctly using an enum type)
+
+query GetVotesFor {
+    votes(input: {
+        filters: {
+            type: for
+             proposalId: 123
+        }
+    })
+    {
+      nodes {
+        id
+          type
+      }
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetVotesFor {
+    votes(input: {
+        filters: {
+            type: "for"
+             proposalId: 123
+        }
+    })
+    {
+      nodes {
+        id
+          type
+      }
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Always ensure the values of enum types match the provided options, and that you are not using a string when an enum is expected. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Rule 7: Pagination Handling (Mandatory)
+
+Problem: Queries that return paginated data do not return complete results if pagination is not handled.
+
+Solution: You must always use the page input with appropriate limit, afterCursor and beforeCursor values to ensure you are retrieving all the results that you want. You must also use the pageInfo field on the returned type to use the cursors.
+
+Example (Correct):
+
+query GetPaginatedProposals($input: ProposalsInput!) {
+  proposals(input: $input) {
+    nodes {
+        ... on Proposal {
+            id
+            metadata {
+                title
+            }
+        }
+    }
+   pageInfo {
+       firstCursor
+       lastCursor
+       count
+     }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+* **Input**
+content_copy
+download
+Use code with caution.
+input ProposalsInput {
+    filters: ProposalsFiltersInput
+    page: PageInput
+    sort: ProposalsSortInput
+}
+
+input ProposalsFiltersInput {
+    governorId: AccountID
+    includeArchived: Boolean
+    isDraft: Boolean
+    organizationId: IntID
+    proposer: Address
+}
+input ProposalsSortInput {
+    isDescending: Boolean!
+    sortBy: ProposalsSortBy!
+}
+enum ProposalsSortBy {
+    id
+}
+
+input PageInput {
+    afterCursor: String
+    beforeCursor: String
+    limit: Int
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Query:
+
+query GetProposalsWithPagination {
+    proposals(input: {
+       page: {
+           limit: 20
+       }
+    }) {
+        nodes {
+            ... on Proposal {
+              id
+               metadata {
+                title
+              }
+           }
+         }
+         pageInfo {
+           firstCursor
+            lastCursor
+           count
+          }
+        }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Query: (Using cursors to get the next page of results)
+
+query GetProposalsWithPagination {
+    proposals(input: {
+       page: {
+           limit: 20
+           afterCursor: "cursorFromPreviousQuery"
+       }
+    }) {
+        nodes {
+          ... on Proposal {
+            id
+            metadata {
+                title
+              }
+           }
+        }
+         pageInfo {
+           firstCursor
+            lastCursor
+           count
+          }
+        }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetProposals {
+  proposals {
+      nodes {
+         ... on Proposal {
+          id
+            metadata {
+                title
+            }
+           }
+       }
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Always use the page input with a limit, and use the cursors to iterate through pages, especially when you are working with paginated data. Failure to do so may result in incomplete data.
+
+Rule 8: Correctly Querying Related Data (Mandatory)
+
+Problem: Attempting to query related data as nested fields within a type will lead to errors if the related data must be fetched in a separate query.
+
+Solution: You must fetch related data by using separate queries, instead of assuming that related data is queryable as nested fields.
+
+Example (Correct)
+
+query GetProposalAndVotes($proposalId: IntID!, $voter: Address) {
+  proposal(input: { id: $proposalId}) {
+    id
+    metadata {
+      title
+    }
+    status
+  }
+  votes(input: {
+    filters: {
+      proposalId: $proposalId
+      voter: $voter
+    }
+  }) {
+    nodes {
+      ... on Vote {
+        type
+        amount
+        voter {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Example (Incorrect - Avoid):
+
+query GetProposals {
+  proposals {
+    ... on Proposal {
+      id
+      metadata {
+        title
+      }
+      votes(input: {
+        filters: {
+          voter: "0x..."
+        }
+      })
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: Do not attempt to fetch related data in the same query, instead, fetch it via a second query. Failure to do so will result in an error.
+
+Rule 9: API Constraints (Mandatory)
+
+Problem: Not all fields or properties are queryable in all situations. Some queries have explicit requirements that must be met.
+
+Solution: You must always check your query against the known API constraints, and ensure that all requirements are met.
+
+Example:
+
+The votes query requires that proposalId or proposalIds is provided in the input. This means you cannot query votes without first querying proposals. Failure to do so will result in an error.
+
+An error you may see is: "proposalId or proposalIds must be provided"
+
+Action: Ensure all API constraits are met and that any required fields are provided when making a query. Failure to do so will result in an error.
+
+Rule 10: Multi-Step Queries (Mandatory)
+
+Problem: Some data can only be accessed by using multiple queries, and requires that data from one query be used as the input for a subsequent query.
+
+Solution: Properly construct multi-step queries by breaking them into a sequence of independent GraphQL queries. Ensure the output of one query is correctly used as input for the next query.
+
+Example
+
+If you need to fetch all the votes from a specific organization, you first need to get the organization id, then use that id to query all the proposals, and then finally, you need to query for all the votes associated with each proposal.
+
+Correct Example
+
+# Step 1: Get the organization ID using a query that filters by slug
+
+query GetOrganizationId($slug: String!) {
+  organization(input: {slug: $slug}) {
+    id
+  }
+}
+
+# Step 2: Get the proposals for the given organization
+query GetProposalsForOrganization($organizationId: IntID!) {
+    proposals(input: {
+      filters: {
+        organizationId: $organizationId
+      }
+    }) {
+        nodes {
+            ... on Proposal {
+                id
+            }
+        }
+    }
+}
+
+# Step 3: Get all the votes for all of the proposals.
+query GetVotesForProposals($proposalIds: [IntID!]!) {
+    votes(input: {
+      filters: {
+         proposalIds: $proposalIds
+      }
+    })
+        {
+        nodes {
+            ... on Vote {
+                id
+                type
+                amount
+            }
+        }
+    }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Action: When a query requires data from another query, structure it as a multi-step query, and use the result of the first query as the input to the subsequent query.
+
+Rule 11: Fragment Usage (Mandatory)
+
+Problem: Defining fragments that aren't used creates unnecessary code.
+
+Solution: You must always use all defined fragments, and any unused fragments must be removed before submitting a query.
+
+Example
+
+fragment BasicAccountInfo on Account {
+  id
+  address
+  ens
+}
+
+fragment VoteDetails on Vote {
+    type
+    amount
+}
+
+query GetVotes($input: VotesInput!) {
+  votes(input: $input) {
+    nodes {
+      ... on Vote {
+        ...VoteDetails
+      }
+    }
+  }
+}
+content_copy
+download
+Use code with caution.
+Graphql
+*   **Action:** All defined fragments *must* be used, and any unused fragments *must* be removed before submitting a query.
+content_copy
+download
+Use code with caution.
+
+Rule 12: Data Verification (Mandatory)
+
+Problem: The LLM may invent data, such as Ethereum addresses, and then use it as a query parameter, without verifying it. This leads to inaccurate results and potentially misleading conclusions.
+
+Solution: The LLM must not invent any external data. If data is used as a query parameter, the LLM must attempt to verify that the data is correct using external sources. If the LLM cannot verify the data, it must explicitly state that the data is unverified, and not present it as fact. Failure to do so is a fatal error.
+
+Specific Error Case: The LLM invents an ethereum address, and uses it to make conclusions about a specific organization.
+
+The LLM assumed an incorrect address for L2BEAT, used the incorrect address in a query, and drew false conclusions about their voting habits.
+
+Action: Before using external data as a query parameter, the LLM must attempt to verify its accuracy, including but not limited to:
+
+External Lookups: Attempt to verify a key identifier (e.g., organization address, slug) through external sources (such as Etherscan, a project's official website, or social media), and use that value in queries to Tally.
+
+Explicit Validation: In all cases where a query uses external values, and the external values could not be verified, the LLM must disclose that the data is not verified, and must not draw conclusions based on the unverified data.
+
+Example of Verification:
+If the LLM needs to get information about the organization "L2BEAT," it must first try to verify L2BEAT's organization address or slug using an external source of truth. If the LLM cannot find a valid and verifiable address, it must not proceed with the query.
+For example:
+
+The LLM must first try to obtain the L2BEAT organization ID, for example, from the Tally UI, or from external sources.
+
+If the LLM cannot obtain the L2BEAT organization ID from an external source, the LLM must not proceed with the query.
+
+If the LLM is able to obtain an L2BEAT organization ID, it must use that ID in its query to Tally.
+
+If the LLM is unable to obtain a valid ID, or must use information from an unverified source, then the LLM must make explicit mention of that fact.
+
+The LLM must make no claims or conclusions about any unverified data.
+
+Emphasis on External Sources: The following should be considered sources of truth when creating queries that reference specific data:
+
+Etherscan: If you are searching for an address, or a contract address, you can use Etherscan to verify that the data is correct.
+
+Project Websites and Socials: Project websites and social accounts should be consulted to verify the claims being made.
+
+Tally UI: The Tally user interface can be used to verify organization addresses or slugs.
+
+Complete Schema Reference
+
+While we cannot provide the entire schema (it would be too lengthy), here are the core types and their most commonly used fields, and examples of the input types:
+
+type Account {
+  id: ID!
+  address: String!
+  ens: String
+  twitter: String
+  name: String!
+  bio: String!
+  picture: String
+  safes: [AccountID!]
+  type: AccountType!
+  votes(governorId: AccountID!): Uint256!
+  proposalsCreatedCount(input: ProposalsCreatedCountInput!): Int!
+}
+
+enum AccountType {
+    EOA
+    SAFE
+}
+type Delegate {
+    id: IntID!
+    account: Account!
+    chainId: ChainID
+    delegatorsCount: Int!
+    governor: Governor
+    organization: Organization
+    statement: DelegateStatement
+    token: Token
+    votesCount(blockNumber: Int): Uint256!
+  }
+
+  input DelegateInput {
+    address: Address!
+    governorId: AccountID
+    organizationId: IntID
+  }
+
+type DelegateStatement {
+    id: IntID!
+    address: Address!
+    organizationID: IntID!
+    statement: String!
+    statementSummary: String
+    isSeekingDelegation: Boolean
+    issues: [Issue!]
+  }
+
+type Delegation {
+    id: IntID!
+    blockNumber: Int!
+    blockTimestamp: Timestamp!
+    chainId: ChainID!
+    delegator: Account!
+    delegate: Account!
+    organization: Organization!
+    token: Token!
+    votes: Uint256!
+}
+input DelegationInput {
+    address: Address!
+    tokenId: AssetID!
+  }
+input DelegationsInput {
+  filters: DelegationsFiltersInput!
+  page: PageInput
+  sort: DelegationsSortInput
+}
+input DelegationsFiltersInput {
+    address: Address!
+    governorId: AccountID
+    organizationId: IntID
+}
+input DelegationsSortInput {
+    isDescending: Boolean!
+    sortBy: DelegationsSortBy!
+}
+enum DelegationsSortBy {
+  id
+  votes
+}
+
+type Governor {
+    id: AccountID!
+    chainId: ChainID!
+    contracts: Contracts!
+    isIndexing: Boolean!
+    isBehind: Boolean!
+    isPrimary: Boolean!
+    kind: GovernorKind!
+    name: String!
+    organization: Organization!
+    proposalStats: ProposalStats!
+    parameters: GovernorParameters!
+    quorum: Uint256!
+    slug: String!
+    timelockId: AccountID
+    tokenId: AssetID!
+    token: Token!
+    type: GovernorType!
+    delegatesCount: Int!
+    delegatesVotesCount: Uint256!
+    tokenOwnersCount: Int!
+    metadata: GovernorMetadata
+  }
+  type GovernorContract {
+    address: Address!
+    type: GovernorType!
+  }
+
+  input GovernorInput {
+    id: AccountID
+    slug: String
+  }
+
+type Organization {
+    id: IntID!
+    slug: String!
+    name: String!
+    chainIds: [ChainID!]!
+    tokenIds: [AssetID!]!
+    governorIds: [AccountID!]!
+    metadata: OrganizationMetadata
+    creator: Account
+    hasActiveProposals: Boolean!
+    proposalsCount: Int!
+    delegatesCount: Int!
+    delegatesVotesCount: Uint256!
+    tokenOwnersCount: Int!
+    endorsementService: EndorsementService
+}
+input OrganizationInput {
+  id: IntID
+  slug: String
+}
+input OrganizationsInput {
+  filters: OrganizationsFiltersInput
+  page: PageInput
+  sort: OrganizationsSortInput
+}
+input OrganizationsFiltersInput {
+  address: Address
+  chainId: ChainID
+  hasLogo: Boolean
+    isMember: Boolean
+}
+input OrganizationsSortInput {
+    isDescending: Boolean!
+    sortBy: OrganizationsSortBy!
+}
+
+enum OrganizationsSortBy {
+  id
+  name
+  explore
+  popular
+}
+
+type Proposal {
+    id: IntID!
+    onchainId: String
+    block: Block
+    chainId: ChainID!
+    creator: Account
+    end: BlockOrTimestamp!
+    events: [ProposalEvent!]!
+    executableCalls: [ExecutableCall!]
+    governor: Governor!
+    metadata: ProposalMetadata!
+    organization: Organization!
+    proposer: Account
+    quorum: Uint256
+    status: ProposalStatus!
+    start: BlockOrTimestamp!
+    voteStats: [VoteStats!]
+}
+input ProposalInput {
+  id: IntID
+  onchainId: String
+  governorId: AccountID
+    includeArchived: Boolean
+    isLatest: Boolean
+}
+type ProposalMetadata {
+  title: String
+  description: String
+  eta: Int
+  ipfsHash: String
+      previousEnd: Int
+      timelockId: AccountID
+      txHash: Hash
+      discourseURL: String
+  snapshotURL: String
+}
+
+input ProposalsInput {
+  filters: ProposalsFiltersInput
+  page: PageInput
+  sort: ProposalsSortInput
+}
+input ProposalsFiltersInput {
+  governorId: AccountID
+  includeArchived: Boolean
+    isDraft: Boolean
+  organizationId: IntID
+  proposer: Address
+}
+input ProposalsSortInput {
+  isDescending: Boolean!
+  sortBy: ProposalsSortBy!
+}
+enum ProposalsSortBy {
+  id
+}
+
+type Token {
+    id: AssetID!
+    type: TokenType!
+    name: String!
+    symbol: String!
+    supply: Uint256!
+    decimals: Int!
+    eligibility: Eligibility
+    isIndexing: Boolean!
+    isBehind: Boolean!
+}
+type Vote {
+    id: IntID!
+    amount: Uint256!
+    block: Block!
+    chainId: ChainID!
+    isBridged: Boolean
+    proposal: Proposal!
+    reason: String
+    type: VoteType!
+    txHash: Hash!
+    voter: Account!
+}
+input VotesInput {
+    filters: VotesFiltersInput
+    page: PageInput
+    sort: VotesSortInput
+  }
+input VotesFiltersInput {
+    proposalId: IntID
+    proposalIds: [IntID!]
+    voter: Address
+    includePendingVotes: Boolean
+    type: VoteType
+}
+input VotesSortInput {
+    isDescending: Boolean!
+    sortBy: VotesSortBy!
+}
+enum VotesSortBy {
+  id
+  amount
+}
+
+enum VoteType {
+    abstain
+    against
+    for
+    pendingabstain
+    pendingagainst
+    pendingfor
+}
+content_copy
+download
+Use code with caution.
+Graphql
+
+Best Practices Checklist (Pre-Flight Check)
+
+Before submitting any query, the LLM must verify that the query logic conforms with each and every item on the following checklist. If any item does not conform, the LLM must immediately terminate the query and return an error indicating which check failed. You must not submit the query if any of the items in the checklist fail.
+
+Interface Fragments: Used inline fragments (... on TypeName) wherever nodes or interface/union types are returned. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Sort/Filter Inputs: Provided a valid input object with correct types, and that mandatory filters are provided. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Fragments: Created and used fragments for reusable field selections. Not using fragments is absolutely unacceptable and will result in a fatal error.
+
+Explicit Fields: Explicitly requested all the necessary fields. Failure to do so may result in errors.
+
+Type Validation: Verified that all input types match the expected type. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Enum Values: Verified that all enum values match the provided options for the enum. Failure to do so is a fatal error and will result in immediate termination of the query.
+
+Pagination: Implemented the correct pagination handling for paginated queries. Failure to do so may result in incomplete data.
+
+Related Data: Used separate queries to fetch related data, and did not attempt to access it in a nested fashion. Failure to do so will result in an error.
+
+API Constraints: Verified that API constraints are met, and that any required fields for the query are included. Failure to do so will result in an error.
+
+Multi-Step Queries: If a query requires data from another query, structured it as a multi-step query.
+
+Fragment Usage: All defined fragments must be used, and any unused fragments must be removed before submitting the query.
+
+Verify Data: You must always verify data before using it as a query parameter. Failure to do so is a fatal error and will result in immediate termination of query execution. You must also explicitly state if the data used could not be verified.
+
+LLM Instructions:
+
+Prioritize this Document: This document supersedes all other query building documentation. This should be your only reference.
+
+Strict Adherence: Any query generated must adhere to all of these rules. There is no acceptable deviation.
+
+Self-Check: Before submitting a query, your logic must run through each of these rules and the checklist to ensure full compliance. If any check fails, the query must not be submitted.
+
+Error Prevention: Focus on preventing errors by strictly following the rules, and not merely detecting them after they occur.
+
+Rule-Based Execution: The LLM's query construction logic must be based exclusively on the rules

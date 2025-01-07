@@ -1,0 +1,11 @@
+# Additional context for query generation and documentation responses
+# Add information that helps generate better queries and documentation responses
+# For example:
+# - Authentication requirements (e.g., "All queries require Bearer token")
+# - Common query patterns (e.g., "Queries should include pagination parameters")
+# - Rate limiting details (e.g., "Max 100 requests per minute")
+# - Required headers (e.g., "Content-Type must be application/json")
+# - Response formats (e.g., "All responses are in JSON format")
+# - Error handling (e.g., "Include error handling for 429 rate limit responses")
+
+# Remove these example comments and add your query metadata here
