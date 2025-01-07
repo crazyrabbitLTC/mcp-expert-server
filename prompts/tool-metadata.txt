@@ -1,1 +1,0 @@
-Always follow the documentation explicitly. Never assume filtering or other operations are possible. 

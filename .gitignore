@@ -14,6 +14,10 @@ dist/
 .env.local
 .env.*.local
 
+# User content directories
+docs/
+prompts/
+
 # IDE
 .idea/
 .vscode/
