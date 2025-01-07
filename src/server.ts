@@ -5,61 +5,34 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ExpertService } from "./services/expertService.js";
 import { z } from "zod";
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 
 function debugLog(message: string) {
   console.error(`[DEBUG] ${message}`);
 }
 
-// Create required directories if they don't exist
-const dirs = ['docs', 'prompts'].map(dir => join(process.cwd(), dir));
-for (const dir of dirs) {
-  if (!existsSync(dir)) {
-    debugLog(`Creating directory: ${dir}`);
-    mkdirSync(dir);
-  }
+// Validate required directories exist
+const baseDir = process.cwd();
+const requiredDirs = ['docs', 'prompts'].map(dir => join(baseDir, dir));
+const missingDirs = requiredDirs.filter(dir => !existsSync(dir));
+
+if (missingDirs.length > 0) {
+  throw new Error(`Required directories are missing. Please run 'npm run setup' first.\nMissing directories: ${missingDirs.join(', ')}`);
 }
 
-// Create required files if they don't exist
-const files = [
-  {
-    path: join(process.cwd(), 'prompts', 'system-prompt.txt'),
-    content: 'You are an expert at analyzing documentation and generating accurate queries and responses based on the provided documentation and context. When asked to generate a query, return ONLY the query with no additional explanation. When asked about documentation, provide clear, concise responses that take into account both the documentation and any additional context provided. Always ensure your responses align with the intended use cases and audience specified in the context.'
-  },
-  {
-    path: join(process.cwd(), 'prompts', 'tool-metadata.txt'),
-    content: `# Additional context about the API/Service for tool descriptions
-# Add information that helps describe what this service is and how it should be used
-# For example:
-# - The intended audience (e.g., "This API is designed for enterprise developers")
-# - Primary use cases (e.g., "Commonly used in IoT deployments")
-# - Service category (e.g., "Part of our data processing suite")
-# - Integration points (e.g., "Core component of our ML pipeline")
-
-# Remove these example comments and add your tool description metadata here`
-  },
-  {
-    path: join(process.cwd(), 'prompts', 'query-metadata.txt'),
-    content: `# Additional context for query generation and documentation responses
-# Add information that helps generate better queries and documentation responses
-# For example:
-# - Authentication requirements (e.g., "All queries require Bearer token")
-# - Common query patterns (e.g., "Queries should include pagination parameters")
-# - Rate limiting details (e.g., "Max 100 requests per minute")
-# - Required headers (e.g., "Content-Type must be application/json")
-# - Response formats (e.g., "All responses are in JSON format")
-# - Error handling (e.g., "Include error handling for 429 rate limit responses")
-
-# Remove these example comments and add your query metadata here`
-  }
+// Validate required files exist
+const requiredFiles = [
+  join(baseDir, 'prompts', 'system-prompt.txt'),
+  join(baseDir, 'prompts', 'tool-metadata.txt'),
+  join(baseDir, 'prompts', 'query-metadata.txt'),
+  join(baseDir, 'prompts', 'service-description.txt')
 ];
 
-for (const file of files) {
-  if (!existsSync(file.path)) {
-    debugLog(`Creating file: ${file.path}`);
-    writeFileSync(file.path, file.content, 'utf-8');
-  }
+const missingFiles = requiredFiles.filter(file => !existsSync(file));
+
+if (missingFiles.length > 0) {
+  throw new Error(`Required files are missing. Please run 'npm run setup' first.\nMissing files: ${missingFiles.join(', ')}`);
 }
 
 const QueryArgumentsSchema = z.object({
