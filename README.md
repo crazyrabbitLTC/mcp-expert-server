@@ -1,4 +1,5 @@
 # MCP Expert Server
+[![smithery badge](https://smithery.ai/badge/mcp-expert-server)](https://smithery.ai/server/mcp-expert-server)
 
 A Model Context Protocol server that provides intelligent query generation and documentation assistance using Claude AI. The server analyzes your API documentation and provides two main tools:
 
@@ -12,6 +13,15 @@ A Model Context Protocol server that provides intelligent query generation and d
 
 ## Installation
 
+### Installing via Smithery
+
+To install Expert Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/mcp-expert-server):
+
+```bash
+npx -y @smithery/cli install mcp-expert-server --client claude
+```
+
+### Manual Installation
 1. Clone the repository
 2. Install dependencies:
 ```bash
